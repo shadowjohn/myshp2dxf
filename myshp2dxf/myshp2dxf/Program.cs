@@ -272,19 +272,28 @@ options:
                     return;
                 }
             }
+            var OUTPUT = new Dictionary<string, object>();
+            if (setting.targetDxf == null)
+            {
+                OUTPUT["STATUS"] = "NO";
+                OUTPUT["REASON"] = "-o 輸出檔不可是空值";
+                Console.WriteLine(my.json_encode(OUTPUT));
+                return;
+            }
 
-            var rb = sh.readShp(setting.sourceShp, setting.sourceSrs, setting.targetSrs, setting.limits, setting.encoding);
+            OUTPUT = sh.readShp(setting.sourceShp, setting.sourceSrs, setting.targetSrs, setting.limits, setting.encoding);
             var mLabel = parseLabel(setting.labelField);
             //Console.WriteLine(my.json_encode(mLabel));
             //return;
             //Console.WriteLine(my.json_format_utf8(my.json_encode(rb["LIST_ATTRIBUTES"])));
             //return;
-            if (rb["STATUS"].ToString() == "NO")
+            if (OUTPUT["STATUS"].ToString() == "NO")
             {
-                Console.WriteLine(my.json_encode(rb));
+                Console.WriteLine(my.json_encode(OUTPUT));
                 return;
             }
-            sh.WriteDXF(setting.targetDxf, rb, mLabel, setting);
+
+            sh.WriteDXF(setting.targetDxf, OUTPUT, mLabel, setting);
             //Console.WriteLine(my.json_format_utf8(my.json_encode(rb)));
             Console.WriteLine("Done..." + setting.targetDxf);
             return;
