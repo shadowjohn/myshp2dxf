@@ -35,9 +35,14 @@ namespace myshp2dxf
         public static myinclude my = new myinclude();
         public static ShapeHelper sh = new ShapeHelper();
         static string usageMessage = @"
-This program can transfer shp file to dxf 2000.
 
+This program can efficiently transfer SHP files to DXF 2000 format, exporting both the data and the structure of the shapefile.
+
+Author: FeatherMountain (https://www.gis.tw/ , https://www.focusit.com.tw/)
+
+Version: 0.01
 myshp2dxf.exe [source shp] -o [target dxf] [options]
+
 options:
     -s_srs EPSG:4326 [Source SRS，如果有 .prj 檔可不填]
     -t_srs EPSG:4326 [Output SRS]
@@ -170,7 +175,7 @@ options:
                 else if (args[i].ToLower() == "-dxf_text_color" && i + 1 < args.Length)
                 {
                     setting.dxf_text_color = new Dictionary<string, int>();
-                    string _rgbhex = args[i + 1];                    
+                    string _rgbhex = args[i + 1];
                     try
                     {
                         setting.dxf_text_color = my.ParseRgbHex(_rgbhex);
