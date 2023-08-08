@@ -31,7 +31,7 @@ namespace utility_ShapeHelper
     {
         sealed class MTF : NetTopologySuite.Geometries.ICoordinateSequenceFilter
         {
-            private readonly MathTransform _mathTransform;
+            //private readonly MathTransform _mathTransform;
 
             //public MTF(MathTransform mathTransform) => _mathTransform = mathTransform;
 
@@ -1872,6 +1872,7 @@ namespace utility_ShapeHelper
 3815,""NAD83(HARN) / Mississippi TM"",9001,4152,3813,9807,1,0,4499,8801,32.3,9110,8802,-89.45,9110,8805,0.9998335,9201,8806,500000,9001,8807,1300000,9001,,,,,,,,,,,,,
 3816,""NAD83(NSRS2007) / Mississippi TM"",9001,4759,3813,9807,1,0,4499,8801,32.3,9110,8802,-89.45,9110,8805,0.9998335,9201,8806,500000,9001,8807,1300000,9001,,,,,,,,,,,,,
 3825,""TWD97 / TM2 zone 119"",9001,3824,3818,9807,1,0,4499,8801,0,9102,8802,119,9102,8805,0.9999,9201,8806,250000,9001,8807,0,9001,,,,,,,,,,,,,
+3826,""TWD_1997_TM_Taiwan"",9001,3824,3820,9807,1,0,4499,8801,0,9102,8802,121,9102,8805,0.9999,9201,8806,250000,9001,8807,0,9001,,,,,,,,,,,,,
 3826,""TWD97 / TM2 zone 121"",9001,3824,3820,9807,1,0,4499,8801,0,9102,8802,121,9102,8805,0.9999,9201,8806,250000,9001,8807,0,9001,,,,,,,,,,,,,
 3827,""TWD67 / TM2 zone 119"",9001,3821,3818,9807,1,0,4499,8801,0,9102,8802,119,9102,8805,0.9999,9201,8806,250000,9001,8807,0,9001,,,,,,,,,,,,,
 3828,""TWD67 / TM2 zone 121"",9001,3821,3820,9807,1,0,4499,8801,0,9102,8802,121,9102,8805,0.9999,9201,8806,250000,9001,8807,0,9001,,,,,,,,,,,,,
@@ -4983,7 +4984,7 @@ namespace utility_ShapeHelper
             Reproject.ReprojectPoints(sourceCoordinates, null, gProjection[fromSRS], gProjection[toSRS], 0, sourceCoordinates.Length / 2);
             return sourceCoordinates;
         }
-        public Dictionary<string, object> readShpInfo(string shpFilename, string s_srs = "EPSG:3826", string t_srs = null)
+        public Dictionary<string, object> readShpInfo(string shpFilename, string s_srs = "EPSG:3826", string t_srs = null, string encoding = "65001")
         {
             var OUTPUT = new Dictionary<string, object>();
             OUTPUT["STATUS"] = "OK";
@@ -4994,6 +4995,22 @@ namespace utility_ShapeHelper
                 OUTPUT["REASON"] = "Shapefile not found..." + shpFilename;
                 return OUTPUT;
             }
+            //看看 subname 是否 shp
+            string sn = Program.my.subname(shpFilename);
+            if (sn.ToLower() != "shp")
+            {
+                OUTPUT["STATUS"] = "NO";
+                OUTPUT["REASON"] = "Source file not shapefile..." + shpFilename;
+                return OUTPUT;
+            }
+
+            // 讀取Shapefile
+            //var shapefileDataReader = NetTopologySuite.IO.Esri.Shapefile.OpenRead(shpFilename);
+
+            // 獲取Shapefile的原始編碼
+            //Encoding originalEncoding = shapefileDataReader.Encoding;
+            //OUTPUT["ENCODING"] = originalEncoding.CodePage;
+            //Console.WriteLine("Shapefile的原始編碼：" + originalEncoding.EncodingName);
             //如果有 prj 檔，讀 prj 檔的 proj
             string dn = Program.my.dirname(shpFilename);
             string mn = Program.my.mainname(shpFilename);
@@ -5007,11 +5024,16 @@ namespace utility_ShapeHelper
                 {
                     t_srs = OUTPUT["S_SRS"].ToString();
                 }
-                s_srs = OUTPUT["S_SRS"].ToString();
+                //s_srs = OUTPUT["S_SRS"].ToString();
             }
-            OUTPUT["S_SRS"] = s_srs;
-            var Features = NetTopologySuite.IO.Esri.Shapefile.ReadAllFeatures(shpFilename);
-            NetTopologySuite.IO.Esri.Shapefile.ReadAllGeometries(shpFilename);
+            //OUTPUT["S_SRS"] = s_srs;
+            //不得為 0...
+            OUTPUT["S_SRS"] = (OUTPUT["S_SRS"].ToString() == "0") ? s_srs : OUTPUT["S_SRS"];
+
+            var options = new NetTopologySuite.IO.Esri.Shapefiles.Readers.ShapefileReaderOptions();
+            options.Encoding = Encoding.GetEncoding(Convert.ToInt32(encoding));
+            var Features = NetTopologySuite.IO.Esri.Shapefile.ReadAllFeatures(shpFilename, options);
+            //NetTopologySuite.IO.Esri.Shapefile.ReadAllGeometries(shpFilename);
             OUTPUT["RECORD_COUNTS"] = Features.Count();
             long step = 0;
             double MinX = -1;
@@ -5066,7 +5088,53 @@ namespace utility_ShapeHelper
             }
 
             OUTPUT["FIELDS"] = Fields;
+            return OUTPUT;
+        }
 
+        //取資料
+        public Dictionary<string, object> readShpData(string shpFilename, string s_srs = "EPSG:3826", string t_srs = null, long limits = -1, string encoding = "65001")
+        {
+            var OUTPUT = readShpInfo(shpFilename, s_srs, t_srs, encoding);
+            if (OUTPUT["STATUS"].ToString() == "NO")
+            {
+                return OUTPUT;
+            }
+            var options = new NetTopologySuite.IO.Esri.Shapefiles.Readers.ShapefileReaderOptions();
+            options.Encoding = Encoding.GetEncoding(Convert.ToInt32(encoding));
+            var Features = NetTopologySuite.IO.Esri.Shapefile.ReadAllFeatures(shpFilename, options);
+            //NetTopologySuite.IO.Esri.Shapefile.ReadAllGeometries(shpFilename);
+            //OUTPUT["DATA"]
+            var data = new List<Dictionary<string, string>>();
+            long step = 0;
+            var Fields = (List<String>)OUTPUT["FIELDS"];
+            WKTWriter wktwriter = new WKTWriter();
+            foreach (var feature in Features)
+            {
+                step++;
+                var d = new Dictionary<string, string>();
+                foreach (var attrName in feature.Attributes.GetNames())
+                {
+                    //Console.WriteLine(Program.my.json_encode(Fields));
+                    //Console.WriteLine($"{attrName,10}: {feature.Attributes[attrName]}");
+                    if (Program.my.in_array(attrName, Fields))
+                    {
+                        //Fields.Add(attrName);
+                        d[attrName] = feature.Attributes[attrName].ToString();
+                    }
+                }
+                //加上 WKT
+                if (s_srs != t_srs)
+                {
+                    feature.Geometry = geomTransform(feature.Geometry, s_srs, t_srs);
+                }
+                d["OGC_WKT"] = wktwriter.WriteFormatted(feature.Geometry);
+                data.Add(d);
+                if (limits != -1 && step == limits)
+                {
+                    break;
+                }
+            }
+            OUTPUT["DATA"] = data;
             return OUTPUT;
         }
         /// <summary>
@@ -5091,9 +5159,10 @@ namespace utility_ShapeHelper
         ///         LIST_ATTRIBUTES List<Dictionary<string,string>> //屬性內容
 
         /// </returns>
-        public Dictionary<string, object> readShp(string shpFilename, string fromSRS = "EPSG:3826", string toSRS = "EPSG:4326", long limits = -1)
+        public Dictionary<string, object> readShp(string shpFilename, string fromSRS = "EPSG:3826", string toSRS = "EPSG:4326", long limits = -1, string encoding = "65001")
         {
-            var OUTPUT = readShpInfo(shpFilename);
+            var OUTPUT = readShpInfo(shpFilename, fromSRS, toSRS, encoding);
+            //Console.WriteLine(Program.my.json_encode(OUTPUT));
             if (OUTPUT["STATUS"].ToString() == "NO")
             {
                 return OUTPUT;
@@ -5102,7 +5171,11 @@ namespace utility_ShapeHelper
             var LIST_FEATURES = new List<Feature>();
             var LIST_ERROR_FEATURES = new List<Feature>();
             long step = 0;
-            var Features = NetTopologySuite.IO.Esri.Shapefile.ReadAllFeatures(shpFilename);
+
+
+            var options = new NetTopologySuite.IO.Esri.Shapefiles.Readers.ShapefileReaderOptions();
+            options.Encoding = Encoding.GetEncoding(Convert.ToInt32(encoding));
+            var Features = NetTopologySuite.IO.Esri.Shapefile.ReadAllFeatures(shpFilename, options);
             //var Geometries = NetTopologySuite.IO.Esri.Shapefile.ReadAllGeometries(shpFilename);
             foreach (var feature in Features)
             {
@@ -5120,6 +5193,8 @@ namespace utility_ShapeHelper
                 }
                 else
                 {
+                    //Console.WriteLine("5123: " + OUTPUT["S_SRS"].ToString());
+                    //Console.WriteLine("toSRS: " + toSRS);
                     if (OUTPUT["S_SRS"].ToString() != toSRS)
                     {
                         feature.Geometry = geomTransform(feature.Geometry, OUTPUT["S_SRS"].ToString(), toSRS);
@@ -5139,9 +5214,9 @@ namespace utility_ShapeHelper
             OUTPUT["LIST_FEATURES"] = new List<Feature>(LIST_FEATURES);
             OUTPUT["LIST_ERROR_FEATURES"] = new List<Feature>(LIST_ERROR_FEATURES);
 
-            Console.WriteLine(((List<Dictionary<string, string>>)OUTPUT["LIST_ATTRIBUTES"]).Count());
-            Console.WriteLine(((List<Feature>)OUTPUT["LIST_FEATURES"]).Count());
-            Console.WriteLine(((List<Feature>)OUTPUT["LIST_ERROR_FEATURES"]).Count());
+            //Console.WriteLine(((List<Dictionary<string, string>>)OUTPUT["LIST_ATTRIBUTES"]).Count());
+            //Console.WriteLine(((List<Feature>)OUTPUT["LIST_FEATURES"]).Count());
+            //Console.WriteLine(((List<Feature>)OUTPUT["LIST_ERROR_FEATURES"]).Count());
             return OUTPUT;
         }
 
@@ -5151,20 +5226,64 @@ namespace utility_ShapeHelper
         /// </summary>
         /// <param name="outDXFFilename">輸出的檔案路徑</param>
         /// <param name="features"></param>
-        public void WriteDXF(string outDXFFilename, List<Feature> features)
+        public void WriteDXF(string outDXFFilename, Dictionary<string, object> data, List<string> mLabel, settingEntity setting)
         {
+            //mLabel 為要顯示的欄位，如 AA01 SP AA02 \t...
             //string LogFileName = string.Format("Coords_{0}.txt", outDXFFilename.Substring(outDXFFilename.LastIndexOf("\\") + 1).Replace(".dxf", ""));
             DxfDocument dxf = new DxfDocument();
 
+            var features = (List<Feature>)data["LIST_FEATURES"];
             for (int i = 0; i < features.Count; i++)
             {
+
+                //features[i].Attributes["AA11"].ToString() 
+                string labelStr = "";
+                foreach (string k in mLabel)
+                {
+                    switch (k.ToLower())
+                    {
+                        case "space":
+                            labelStr += " ";
+                            break;
+                        case "\\t":
+                            labelStr += "\\t";
+                            break;
+                        case "\\n":
+                        case "\\p":
+                            //From : https://forums.autodesk.com/t5/autocad-lt-forum/unicode-equivalent-for-line-breaks-is-it-possible/td-p/10729264
+                            labelStr += "\\P";
+                            break;
+                        case ",":
+                            labelStr += ",";
+                            break;
+                        case "-":
+                            labelStr += "-";
+                            break;
+                        default:
+                            if (!Program.my.in_array(k, (List<string>)data["FIELDS"]))
+                            {
+                                //Console.WriteLine(k);
+                                labelStr += "欄位不存在";
+                            }
+                            else
+                            {
+                                labelStr += features[i].Attributes[k].ToString();
+                            }
+                            break;
+                    }
+                }
+                //強轉 utf-8
+                //Console.WriteLine(labelStr);
+                //labelStr = Program.my.CP950ToUTF8(labelStr);
+                //Console.WriteLine(labelStr);
                 switch (features[i].Geometry.GeometryType)
                 {
                     case "Polygon":
                         NetTopologySuite.Geometries.Point CenterPoint;
                         try
-                        {                            
+                        {
                             CenterPoint = features[i].Geometry.InteriorPoint;
+                            //Console.WriteLine("CenterPoint InteriorPoint X , Y: " + CenterPoint.X + "," + CenterPoint.Y);
                         }
                         catch
                         {
@@ -5174,12 +5293,13 @@ namespace utility_ShapeHelper
                             // and LINESTRING(121.510700866602 25.0283796112752, 121.51077959160419 25.0283368503556) [ (121.51073298698765, 25.028362164502383, NaN) ]
 
                             CenterPoint = features[i].Geometry.Centroid;
+                            //Console.WriteLine("CenterPoint Centroid X , Y: " + CenterPoint.X + "," + CenterPoint.Y);
                         }
 
                         //加入圖
                         #region 加入圖
                         Layer GraphicLayer = new Layer("0");
-                        GraphicLayer.Color = new AciColor(System.Drawing.Color.White);
+                        GraphicLayer.Color = new AciColor(System.Drawing.Color.FromArgb(setting.dxf_line_color["R"], setting.dxf_line_color["G"], setting.dxf_line_color["B"]));
                         Polyline2D graphic = new Polyline2D();
 
                         string GeometryType = ((Polygon)features[i].Geometry).Boundary.GeometryType;
@@ -5223,14 +5343,27 @@ namespace utility_ShapeHelper
                         //var mstyle = new TextStyle("微軟正黑體", "msjh.ttf", netDxf.Tables.FontStyle.Bold);
                         double height = 0.6;//GetTextHeight(features[i].Geometry.Area);
 
+
+
                         //MTEXT改成TEXT
-                        var t = new Text(features[i].Attributes["AA11"].ToString() + features[i].Attributes["AA12"].ToString()
-                                        , new Vector2 { X = CenterPoint.X - (height * 2), Y = CenterPoint.Y + height }
-                                        , height/*, mstyle*/);
+
+
+                        var t = new MText(labelStr //features[i].Attributes["AA11"].ToString() + features[i].Attributes["AA12"].ToString()
+                                                   //, new Vector2 { X = CenterPoint.X - (height * 2), Y = CenterPoint.Y + height }
+                                        , new Vector2
+                                        {
+                                            X = CenterPoint.X,
+                                            Y = CenterPoint.Y
+                                        }, height)
+                        {
+                            // 設置居中對齊
+                            AttachmentPoint = MTextAttachmentPoint.BottomCenter
+                        };   // mstyle
                         Layer TextLayer = new Layer("SCNO");
                         t.Layer = TextLayer;
-                        t.Layer.Color = new AciColor(System.Drawing.Color.White);
+                        t.Layer.Color = new AciColor(System.Drawing.Color.FromArgb(setting.dxf_text_color["R"], setting.dxf_text_color["G"], setting.dxf_text_color["B"]));
                         t.Rotation = 0;
+                        t.AttachmentPoint = MTextAttachmentPoint.MiddleCenter;
                         //dxf.AddEntity(t);
                         dxf.Entities.Add(t);
                         #endregion
@@ -5244,7 +5377,7 @@ namespace utility_ShapeHelper
                         {
                             //加入圖
                             #region 加入圖
-                            GraphicLayer2.Color = new AciColor(System.Drawing.Color.White);
+                            GraphicLayer2.Color = new AciColor(System.Drawing.Color.FromArgb(setting.dxf_line_color["R"], setting.dxf_line_color["G"], setting.dxf_line_color["B"]));
                             Polyline2D graphic2 = new Polyline2D();
                             string GeometryType2 = PolygonList[j].Boundary.GeometryType;
 
@@ -5293,13 +5426,26 @@ namespace utility_ShapeHelper
                                 //var mstyle2 = new TextStyle("微軟正黑體", "msjh.ttf", netDxf.Tables.FontStyle.Bold); 
                                 double height2 = 0.6;//GetTextHeight(PolygonList[j].Area);
 
+                                //Console.WriteLine("CenterPoint InteriorPoint X , Y: " + CenterPoint2.X + "," + CenterPoint2.Y);
+
                                 //MTEXT改成TEXT
-                                var t2 = new Text(features[i].Attributes["AA11"].ToString() + features[i].Attributes["AA12"].ToString()
-                                                 , new Vector2 { X = CenterPoint2.X - (height2 * 2), Y = CenterPoint2.Y + height2 }
-                                                 , height2/*, mstyle2*/);
+                                var t2 = new MText(labelStr //features[i].Attributes["AA11"].ToString() + features[i].Attributes["AA12"].ToString()
+                                                            //, new Vector2 { X = CenterPoint2.X - (height2 * 2), Y = CenterPoint2.Y + height2 }
+                                                 , new Vector2
+                                                 {
+                                                     X = CenterPoint2.X,
+                                                     Y = CenterPoint2.Y
+                                                 }, height2)
+                                {
+                                    // 設置居中對齊
+                                    AttachmentPoint = MTextAttachmentPoint.MiddleCenter
+                                };
+
+                                //, mstyle2
                                 t2.Layer = TextLayer2;
-                                t2.Layer.Color = new AciColor(System.Drawing.Color.White);
+                                t2.Layer.Color = new AciColor(System.Drawing.Color.FromArgb(setting.dxf_text_color["R"], setting.dxf_text_color["G"], setting.dxf_text_color["B"]));
                                 t2.Rotation = 0;
+                                t2.AttachmentPoint = MTextAttachmentPoint.MiddleCenter;
                                 dxf.Entities.Add(t2);
                                 //dxf.AddEntity(t2);
                             }

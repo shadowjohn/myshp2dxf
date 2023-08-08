@@ -192,6 +192,67 @@ namespace utility
             }
             return true;
         }
+        public string UTF8toBig5(string utf8Text)
+        {
+            // 嘗試以UTF-8解碼
+            Encoding utf8Encoding = Encoding.UTF8;
+            byte[] utf8Bytes = utf8Encoding.GetBytes(utf8Text);
+
+            // 嘗試以Big5解碼
+            Encoding big5Encoding = Encoding.GetEncoding("big5");
+            byte[] big5Bytes = Encoding.Convert(utf8Encoding, big5Encoding, utf8Bytes);
+
+            // 將字節數組轉換回Big5編碼的文本
+            string big5Text = big5Encoding.GetString(big5Bytes);
+
+            return big5Text;
+        }
+        public string UTF8toCP950(string utf8Text)
+        {
+            // 嘗試以UTF-8解碼
+            Encoding utf8Encoding = Encoding.UTF8;
+            byte[] utf8Bytes = utf8Encoding.GetBytes(utf8Text);
+
+            // 嘗試以CP950解碼
+            Encoding cp950Encoding = Encoding.GetEncoding(950);
+            byte[] cp950Bytes = Encoding.Convert(utf8Encoding, cp950Encoding, utf8Bytes);
+
+            // 將字節數組轉換回CP950編碼的文本
+            string cp950Text = cp950Encoding.GetString(cp950Bytes);
+
+            return cp950Text;
+        }
+        public string Big5ToUTF8(string big5Text)
+        {
+            // 嘗試以Big5解碼
+            Encoding big5Encoding = Encoding.GetEncoding("big5");
+            byte[] big5Bytes = big5Encoding.GetBytes(big5Text);
+
+            // 嘗試以UTF-8解碼
+            Encoding utf8Encoding = Encoding.UTF8;
+            byte[] utf8Bytes = Encoding.Convert(big5Encoding, utf8Encoding, big5Bytes);
+
+            // 將字節數組轉換回UTF-8編碼的文本
+            string utf8Text = utf8Encoding.GetString(utf8Bytes);
+
+            return utf8Text;
+        }
+        public string CP950ToUTF8(string cp950Text)
+        {
+            // 嘗試以CP950解碼
+            Encoding cp950Encoding = Encoding.GetEncoding(950);
+            byte[] cp950Bytes = cp950Encoding.GetBytes(cp950Text);
+
+            // 嘗試以UTF-8解碼
+            Encoding utf8Encoding = Encoding.UTF8;
+            byte[] utf8Bytes = Encoding.Convert(cp950Encoding, utf8Encoding, cp950Bytes);
+
+            // 將字節數組轉換回UTF-8編碼的文本
+            string utf8Text = utf8Encoding.GetString(utf8Bytes);
+
+            return utf8Text;
+        }
+
         public bool is_string_like(string data, string find_string)
         {
             return (data.IndexOf(find_string) == -1) ? false : true;
@@ -203,7 +264,7 @@ namespace utility
         public string json_format_utf8(string input)
         {
             JArray jdod = json_decode(input);
-            return JsonConvert.SerializeObject(jdod, Formatting.Indented);
+            return JsonConvert.SerializeObject(jdod[0], Formatting.Indented);
         }
         public string[] explode(string keyword, string data)
         {
@@ -216,6 +277,106 @@ namespace utility
         public string[] explode(string[] keyword, string data)
         {
             return data.Split(keyword, StringSplitOptions.None);
+        }
+        public string b2s(byte[] input)
+        {
+            return System.Text.Encoding.UTF8.GetString(input);
+        }
+        public byte[] s2b(string input)
+        {
+            return System.Text.Encoding.UTF8.GetBytes(input);
+        }
+        public void file_put_contents(string filepath, string input)
+        {
+            file_put_contents(filepath, s2b(input), false);
+        }
+        public void file_put_contents(string filepath, byte[] input)
+        {
+            file_put_contents(filepath, input, false);
+        }
+        public void file_put_contents(string filepath, string input, bool isFileAppend)
+        {
+            file_put_contents(filepath, s2b(input), isFileAppend);
+        }
+        public void file_put_contents(string filepath, byte[] input, bool isFileAppend)
+        {
+
+            switch (isFileAppend)
+            {
+                case true:
+                    {
+                        FileMode FM = new FileMode();
+                        if (!is_file(filepath))
+                        {
+                            FM = FileMode.Create;
+                            using (FileStream myFile = File.Open(@filepath, FM, FileAccess.Write, FileShare.Read))
+                            {
+                                myFile.Seek(myFile.Length, SeekOrigin.Begin);
+                                myFile.Write(input, 0, input.Length);
+                                myFile.Dispose();
+                            }
+                        }
+                        else
+                        {
+                            FM = FileMode.Append;
+                            using (FileStream myFile = File.Open(@filepath, FM, FileAccess.Write, FileShare.Read))
+                            {
+                                myFile.Seek(myFile.Length, SeekOrigin.Begin);
+                                myFile.Write(input, 0, input.Length);
+                                myFile.Dispose();
+                            }
+                        }
+                    }
+                    break;
+                case false:
+                    {
+                        using (FileStream myFile = File.Open(@filepath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+                        {
+                            myFile.Write(input, 0, input.Length);
+                            myFile.Dispose();
+                        };
+                    }
+                    break;
+            }
+        }
+        public Dictionary<string, int> ParseRgbHex(string color)
+        {
+            string pattern = @"^#(?:[0-9a-fA-F]{3}){1,2}$"; // HEX表示的正則表達式
+            bool isHex = Regex.IsMatch(color, pattern);
+
+            if (isHex)
+            {
+                if (color.StartsWith("#"))
+                {
+                    color = color.Substring(1); // 去掉 "#" 符號
+                }
+
+                int r = Convert.ToInt32(color.Substring(0, 2), 16);
+                int g = Convert.ToInt32(color.Substring(2, 2), 16);
+                int b = Convert.ToInt32(color.Substring(4, 2), 16);
+
+                return new Dictionary<string, int>
+            {
+                { "R", r },
+                { "G", g },
+                { "B", b }
+            };
+            }
+            else
+            {
+                // 將 RGB(255, 165, 0) 格式轉換成數值
+                MatchCollection matches = Regex.Matches(color, @"\d+");
+                int r = int.Parse(matches[0].Value);
+                int g = int.Parse(matches[1].Value);
+                int b = int.Parse(matches[2].Value);
+
+                return new Dictionary<string, int>
+            {
+                { "R", r },
+                { "G", g },
+                { "B", b }
+            };
+            }
         }
     }
 }
